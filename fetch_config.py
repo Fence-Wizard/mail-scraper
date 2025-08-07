@@ -19,5 +19,12 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
+    # Toggle verbose debug logging
+    debug: bool = False
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
 # instantiate at import time
 settings = Settings()
