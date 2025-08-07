@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # The root folder name under which jobs are organized
     root_folder_name: str = "2024 Jobs"
 
+    # Toggle verbose debug logging
+    debug: bool = False
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
