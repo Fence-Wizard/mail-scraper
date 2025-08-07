@@ -1,7 +1,6 @@
 # fetch_config.py
-import os
-from pathlib import Path
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 class Settings(BaseSettings):
     # Azure / Graph API
@@ -14,9 +13,11 @@ class Settings(BaseSettings):
     # The root folder name under which jobs are organized
     root_folder_name: str = "2024 Jobs"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    # load from .env file
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
 # instantiate at import time
 settings = Settings()
