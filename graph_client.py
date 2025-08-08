@@ -53,3 +53,15 @@ class GraphClient:
             data = await self._get(next_link, None)
             logger.debug(f"Fetched page with {len(data.get('value', []))} items")
             yield data
+# graph_client.py (inside class GraphClient)
+
+    async def _get_bytes(self, url: str) -> bytes:
+        """Fetch raw bytes from Graph (used for /$value endpoints)."""
+        await self.authenticate()
+        resp = await self.http.get(
+            self.base_url + url,
+            headers={"Authorization": f"Bearer {self._access_token}"}
+        )
+        resp.raise_for_status()
+        return resp.content
+
