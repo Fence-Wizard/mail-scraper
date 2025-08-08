@@ -1,0 +1,69 @@
+version: 1
+
+globals:
+  currency: USD
+
+  # Default approval threshold (used only for labeling/context in preview)
+  default_approval_threshold: 1000.0
+
+  # Optional per-vendor overrides
+  vendor_overrides:
+    "Master Halco": { approval_threshold: 2500.0 }
+    "Culpeper Wood": { approval_threshold: 1500.0 }
+
+  # If any required field is missing, route = unknown
+  required_fields:
+    - vendor
+    - total
+
+  # Classification rules
+  classification:
+    job_if:
+      - field: job_number
+        operator: exists
+      - field: source_subject
+        operator: regex
+        value: "(?i)job\\s*#?\\s*\\d{5,7}|work\\s*order|submittal|RFI"
+    stock_if:
+      - field: source_subject
+        operator: regex
+        value: "(?i)stock|restock|inventory|warehouse"
+      - field: source_sender
+        operator: domain_in
+        value:
+          - masterhalco.com
+          - uline.com
+          - culpeperwood.com
+          - merchantsmetals.com
+    default: "unknown"
+
+routing:
+  # What to do with an unknown, stock, or job doc (no side effects here—just labels)
+  unknown:
+    label: "TRIAGE"
+    rules:
+      - action: label
+        name: "Unknown: Missing critical fields or no rules matched"
+
+  stock:
+    label: "STOCK"
+    rules:
+      - when: "total >= approval_threshold(vendor)"
+        action: label
+        name: "Stock – Needs Approval"
+      - when: "total < approval_threshold(vendor)"
+        action: label
+        name: "Stock – Standard"
+
+  job:
+    label: "JOB"
+    rules:
+      - when: "job_number is missing"
+        action: label
+        name: "Job – Missing Job Number"
+      - when: "total >= approval_threshold(vendor)"
+        action: label
+        name: "Job – Needs Approval"
+      - when: "total < approval_threshold(vendor)"
+        action: label
+        name: "Job – Standard"
