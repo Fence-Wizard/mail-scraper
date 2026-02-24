@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-ui_app = FastAPI(title="Procurement Webapp UI", version="2.0.0")
+ui_app = FastAPI(title="Procurement Webapp UI", version="3.0.0")
 
 
 @ui_app.get("/", response_class=HTMLResponse)
@@ -9,20 +9,44 @@ def home() -> str:
     return _HTML
 
 
-_STAGES = [
-    ("job_setup", "Job Setup"),
-    ("budget_review", "Budget Review"),
-    ("task_assignment", "Task Assignment"),
-    ("material_check", "Material Check"),
-    ("pricing_validation", "Pricing / PO"),
-    ("vendor_coordination", "Vendor Coordination"),
-    ("order_placement", "Order Placement"),
-    ("order_confirmation", "Order Confirmation"),
-    ("yard_pull", "Yard Pull"),
-    ("material_receiving", "Material Receiving"),
-    ("completion_check", "Completion Check"),
-    ("completed", "Completed"),
+# Stages grouped into processes separated by decision points.
+PROCESSES = [
+    {
+        "id": "job_intake",
+        "label": "Job Intake & Budget",
+        "color": "#3b82f6",
+        "stages": [
+            ("job_setup", "Job Setup"),
+            ("budget_review", "Budget Review"),
+            ("task_assignment", "Task Assignment"),
+        ],
+    },
+    {
+        "id": "material_sourcing",
+        "label": "Material Sourcing",
+        "color": "#f59e0b",
+        "stages": [
+            ("material_check", "Material Check"),
+            ("pricing_validation", "Pricing / PO"),
+            ("vendor_coordination", "Vendor Coordination"),
+            ("order_placement", "Order Placement"),
+        ],
+    },
+    {
+        "id": "order_fulfillment",
+        "label": "Order Fulfillment",
+        "color": "#22c55e",
+        "stages": [
+            ("order_confirmation", "Order Confirmation"),
+            ("yard_pull", "Yard Pull"),
+            ("material_receiving", "Material Receiving"),
+            ("completion_check", "Completion Check"),
+            ("completed", "Completed"),
+        ],
+    },
 ]
+
+_STAGES = [stage for proc in PROCESSES for stage in proc["stages"]]
 
 _HTML = r"""<!DOCTYPE html>
 <html lang="en">
@@ -44,9 +68,11 @@ input,select{font-family:inherit}
 
 /* Sidebar */
 .sidebar{width:240px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100}
-.sidebar-brand{padding:20px 16px;border-bottom:1px solid var(--border)}
-.sidebar-brand h1{font-size:15px;font-weight:700;color:var(--text);line-height:1.3}
-.sidebar-brand p{font-size:11px;color:var(--muted);margin-top:4px}
+.sidebar-brand{padding:20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.sidebar-brand-logo{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#3b82f6 0%,#06b6d4 100%);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sidebar-brand-logo svg{width:22px;height:22px}
+.sidebar-brand-text h1{font-size:14px;font-weight:700;color:var(--text);line-height:1.2;letter-spacing:.02em}
+.sidebar-brand-text p{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.06em}
 .sidebar-nav{flex:1;padding:8px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;transition:all .15s;border:none;background:none;width:100%;text-align:left}
 .nav-item:hover{background:var(--surface);color:var(--text)}
@@ -79,24 +105,43 @@ input,select{font-family:inherit}
 .kpi-value{font-size:26px;font-weight:700}
 .kpi-sub{font-size:11px;color:var(--muted);margin-top:4px}
 
-/* Board */
-.board{display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;align-items:flex-start}
-.lane{min-width:240px;max-width:260px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;max-height:calc(100vh - 180px)}
-.lane-header{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);border-radius:10px 10px 0 0;z-index:1}
-.lane-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
-.lane-count{font-size:11px;background:var(--surface2);padding:2px 8px;border-radius:99px;color:var(--text);font-weight:600}
-.lane-body{padding:6px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:6px}
-.card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;transition:border-color .15s}
+/* Board - Process Groups */
+.board-processes{display:flex;flex-direction:column;gap:0}
+.process-group{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.process-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+.process-header-left{display:flex;align-items:center;gap:10px}
+.process-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.process-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.process-count{font-size:11px;background:var(--surface2);padding:2px 10px;border-radius:99px;color:var(--text);font-weight:600}
+.process-lanes{display:flex;gap:8px;padding:10px;overflow-x:auto;align-items:flex-start}
+.lane{min-width:210px;max-width:230px;flex-shrink:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;max-height:360px}
+.lane-header{padding:8px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface2);border-radius:8px 8px 0 0;z-index:1}
+.lane-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.lane-count{font-size:10px;background:var(--bg);padding:2px 7px;border-radius:99px;color:var(--text);font-weight:600}
+.lane-body{padding:5px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:5px}
+.card{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;cursor:pointer;transition:border-color .15s}
 .card:hover{border-color:var(--accent)}
-.card-job{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px}
-.card-vendor{font-size:11px;color:var(--muted);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card-row{display:flex;justify-content:space-between;align-items:center;font-size:11px}
+.card-job{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:3px}
+.card-vendor{font-size:10px;color:var(--muted);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-row{display:flex;justify-content:space-between;align-items:center;font-size:10px}
 .card-amount{font-weight:600}
-.pill{display:inline-block;font-size:10px;padding:2px 8px;border-radius:99px;font-weight:600}
+.pill{display:inline-block;font-size:9px;padding:2px 7px;border-radius:99px;font-weight:600}
 .pill-high{background:rgba(239,68,68,.15);color:var(--red)}
 .pill-normal{background:rgba(59,130,246,.12);color:var(--accent)}
 .pill-human{background:rgba(245,158,11,.15);color:var(--amber)}
 .pill-auto{background:rgba(34,197,94,.12);color:var(--green)}
+
+/* Decision Point Connectors */
+.decision-connector{display:flex;align-items:center;justify-content:center;padding:6px 0;position:relative}
+.decision-connector::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--border);transform:translateX(-50%)}
+.decision-diamond{position:relative;z-index:1;width:180px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.diamond-shape{width:32px;height:32px;background:var(--surface);border:2px solid var(--amber);transform:rotate(45deg);display:flex;align-items:center;justify-content:center}
+.diamond-shape .diamond-icon{transform:rotate(-45deg);font-size:12px;color:var(--amber)}
+.decision-label{font-size:10px;font-weight:700;color:var(--amber);text-align:center;text-transform:uppercase;letter-spacing:.03em}
+.decision-branches{display:flex;gap:20px;font-size:10px;color:var(--muted)}
+.branch-yes{color:var(--green)}
+.branch-no{color:var(--red)}
+.flow-arrow{position:relative;z-index:1;display:flex;align-items:center;justify-content:center}
 
 /* Table */
 .data-table{width:100%;border-collapse:collapse;font-size:12px}
@@ -115,6 +160,7 @@ input,select{font-family:inherit}
 .detail-field label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px}
 .detail-field .val{font-size:14px}
 .detail-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+.detail-process-tag{display:inline-block;font-size:10px;padding:3px 10px;border-radius:99px;font-weight:600;margin-bottom:8px}
 
 /* Activity */
 .activity-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
@@ -127,8 +173,8 @@ input,select{font-family:inherit}
 /* Responsive */
 @media(max-width:900px){
   .sidebar{width:60px}
-  .sidebar-brand p,.nav-item span:not(.icon),.sidebar-footer label{display:none}
-  .sidebar-brand h1{font-size:11px;text-align:center}
+  .sidebar-brand-text,.nav-item span:not(.icon),.sidebar-footer label{display:none}
+  .sidebar-brand{justify-content:center;padding:12px 8px}
   .main{margin-left:60px}
   .nav-item{justify-content:center;padding:12px}
 }
@@ -147,8 +193,19 @@ input,select{font-family:inherit}
 
 <aside class="sidebar">
   <div class="sidebar-brand">
-    <h1>Hurricane Fence</h1>
-    <p>Procurement Platform</p>
+    <div class="sidebar-brand-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10"/>
+        <path d="M19.5 4.5c-1.5 2-4 4.5-7.5 4.5S5 9 3.5 7"/>
+        <path d="M12 2c2 2.5 3 5.5 3 8.5"/>
+        <path d="M12 2c-2 2.5-3 5.5-3 8.5"/>
+        <path d="M2 12h10"/>
+      </svg>
+    </div>
+    <div class="sidebar-brand-text">
+      <h1>Hurricane Fence</h1>
+      <p>Procurement</p>
+    </div>
   </div>
   <nav class="sidebar-nav">
     <button class="nav-item active" data-page="dashboard">
@@ -195,7 +252,7 @@ input,select{font-family:inherit}
         <div>
           <h3 style="font-size:14px;margin-bottom:10px">Jobs by Stage</h3>
           <div class="table-wrap" style="max-height:360px">
-            <table class="data-table"><thead><tr><th>Stage</th><th>Count</th></tr></thead><tbody id="stageTable"></tbody></table>
+            <table class="data-table"><thead><tr><th>Process</th><th>Stage</th><th>Count</th></tr></thead><tbody id="stageTable"></tbody></table>
           </div>
         </div>
         <div>
@@ -207,14 +264,14 @@ input,select{font-family:inherit}
 
     <!-- JOB BOARD -->
     <div class="page" id="page-board">
-      <div class="board" id="jobBoard"></div>
+      <div class="board-processes" id="jobBoard"></div>
     </div>
 
     <!-- APPROVALS -->
     <div class="page" id="page-approvals">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>Task</th><th>Job</th><th>Stage</th><th>Priority</th><th>Reason</th><th>Amount</th><th>Action</th></tr></thead>
+          <thead><tr><th>Task</th><th>Job</th><th>Process</th><th>Stage</th><th>Priority</th><th>Reason</th><th>Amount</th><th>Action</th></tr></thead>
           <tbody id="approvalRows"></tbody>
         </table>
       </div>
@@ -245,21 +302,61 @@ input,select{font-family:inherit}
 
 <script>
 const API="/api";
-const STAGES=[
-  ["job_setup","Job Setup"],
-  ["budget_review","Budget Review"],
-  ["task_assignment","Task Assignment"],
-  ["material_check","Material Check"],
-  ["pricing_validation","Pricing / PO"],
-  ["vendor_coordination","Vendor Coordination"],
-  ["order_placement","Order Placement"],
-  ["order_confirmation","Order Confirmation"],
-  ["yard_pull","Yard Pull"],
-  ["material_receiving","Material Receiving"],
-  ["completion_check","Completion Check"],
-  ["completed","Completed"]
+
+// Process definitions with stages and decision points
+const PROCESSES=[
+  {
+    id:"job_intake",
+    label:"Job Intake & Budget",
+    color:"#3b82f6",
+    stages:[
+      ["job_setup","Job Setup"],
+      ["budget_review","Budget Review"],
+      ["task_assignment","Task Assignment"]
+    ],
+    decisionAfter:{
+      label:"In Stock?",
+      yesLabel:"Yes \u2192 Yard Pull",
+      noLabel:"No \u2192 Need PO"
+    }
+  },
+  {
+    id:"material_sourcing",
+    label:"Material Sourcing",
+    color:"#f59e0b",
+    stages:[
+      ["material_check","Material Check"],
+      ["pricing_validation","Pricing / PO"],
+      ["vendor_coordination","Vendor Coordination"],
+      ["order_placement","Order Placement"]
+    ],
+    decisionAfter:null
+  },
+  {
+    id:"order_fulfillment",
+    label:"Order Fulfillment",
+    color:"#22c55e",
+    stages:[
+      ["order_confirmation","Order Confirmation"],
+      ["yard_pull","Yard Pull"],
+      ["material_receiving","Material Receiving"],
+      ["completion_check","Completion Check"],
+      ["completed","Completed"]
+    ],
+    decisionAfter:null
+  }
 ];
-const STAGE_LABELS=Object.fromEntries(STAGES);
+
+const ALL_STAGES=PROCESSES.flatMap(p=>p.stages);
+const STAGE_LABELS=Object.fromEntries(ALL_STAGES);
+
+// Map stage to process info
+const STAGE_TO_PROCESS={};
+PROCESSES.forEach(p=>{
+  p.stages.forEach(([key])=>{
+    STAGE_TO_PROCESS[key]={id:p.id,label:p.label,color:p.color};
+  });
+});
 
 let STATE={tasks:[],approvals:[],vendors:[],actions:[],summary:{}};
 
@@ -328,11 +425,15 @@ function renderDashboard(){
 
   const stageCounts={};
   STATE.tasks.forEach(t=>{const st=t.workflow_stage||"unknown";stageCounts[st]=(stageCounts[st]||0)+1});
-  document.getElementById("stageTable").innerHTML=STAGES.map(([key,label])=>{
-    const n=stageCounts[key]||0;
-    if(!n)return"";
-    return`<tr><td>${label}</td><td>${n}</td></tr>`;
-  }).join("")||"<tr><td colspan=2 class='empty-state'>No data</td></tr>";
+  let tableHTML="";
+  PROCESSES.forEach(proc=>{
+    proc.stages.forEach(([key,label])=>{
+      const n=stageCounts[key]||0;
+      if(!n)return;
+      tableHTML+=`<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${proc.color};margin-right:6px"></span>${proc.label}</td><td>${label}</td><td>${n}</td></tr>`;
+    });
+  });
+  document.getElementById("stageTable").innerHTML=tableHTML||"<tr><td colspan=3 class='empty-state'>No data</td></tr>";
 
   document.getElementById("dashActivity").innerHTML=(STATE.actions||[]).slice(0,15).map(a=>`
     <div class="activity-item">
@@ -344,43 +445,84 @@ function renderDashboard(){
     </div>`).join("")||"<div class='empty-state'>No recent activity</div>";
 }
 
-// ---- Job Board ----
+// ---- Job Board (Process-based) ----
 function renderBoard(){
   const byStage={};
-  STAGES.forEach(([k])=>byStage[k]=[]);
+  ALL_STAGES.forEach(([k])=>byStage[k]=[]);
   STATE.tasks.forEach(t=>{
     const st=t.workflow_stage||"job_setup";
     if(!byStage[st])byStage[st]=[];
     byStage[st].push(t);
   });
 
-  document.getElementById("jobBoard").innerHTML=STAGES.map(([key,label])=>{
-    const items=byStage[key]||[];
-    const cards=items.slice(0,30).map(t=>{
-      const d=t.details||{};
-      const pri=t.priority==="high"?"pill-high":"pill-normal";
-      const mode=t.human_required?"pill-human":"pill-auto";
-      return`<div class="card" onclick="openDetail(${t.id})">
-        <div class="card-job">${t.job_number||"No Job #"}</div>
-        <div class="card-vendor">${d.vendor||"Unknown vendor"}</div>
-        <div class="card-row">
-          <span class="pill ${pri}">${t.priority}</span>
-          <span class="card-amount">${d.total!=null?money(d.total):""}</span>
+  let html="";
+
+  PROCESSES.forEach((proc,procIdx)=>{
+    let processTotal=0;
+    proc.stages.forEach(([key])=>{processTotal+=(byStage[key]||[]).length});
+
+    html+=`<div class="process-group">`;
+    html+=`<div class="process-header">
+      <div class="process-header-left">
+        <span class="process-dot" style="background:${proc.color}"></span>
+        <span class="process-title" style="color:${proc.color}">${proc.label}</span>
+      </div>
+      <span class="process-count">${processTotal} job${processTotal!==1?"s":""}</span>
+    </div>`;
+
+    html+=`<div class="process-lanes">`;
+    proc.stages.forEach(([key,label])=>{
+      const items=byStage[key]||[];
+      const cards=items.slice(0,25).map(t=>{
+        const d=t.details||{};
+        const pri=t.priority==="high"?"pill-high":"pill-normal";
+        const mode=t.human_required?"pill-human":"pill-auto";
+        return`<div class="card" onclick="openDetail(${t.id})">
+          <div class="card-job">${t.job_number||"No Job #"}</div>
+          <div class="card-vendor">${d.vendor||"Unknown vendor"}</div>
+          <div class="card-row">
+            <span class="pill ${pri}">${t.priority}</span>
+            <span class="card-amount">${d.total!=null?money(d.total):""}</span>
+          </div>
+          <div class="card-row" style="margin-top:3px">
+            <span class="pill ${mode}">${t.human_required?"Needs Approval":"Auto"}</span>
+          </div>
+        </div>`;
+      }).join("");
+      const overflow=items.length>25?`<div style="padding:4px;font-size:10px;color:var(--muted);text-align:center">+${items.length-25} more</div>`:"";
+      html+=`<div class="lane">
+        <div class="lane-header">
+          <span class="lane-title">${label}</span>
+          <span class="lane-count">${items.length}</span>
         </div>
-        <div class="card-row" style="margin-top:4px">
-          <span class="pill ${mode}">${t.human_required?"Needs Approval":"Auto"}</span>
+        <div class="lane-body">${cards||"<div class='empty-state' style='padding:16px 8px'>No items</div>"}${overflow}</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+
+    // Decision point connector between processes
+    if(proc.decisionAfter&&procIdx<PROCESSES.length-1){
+      const dec=proc.decisionAfter;
+      html+=`<div class="decision-connector">
+        <div class="decision-diamond">
+          <div class="diamond-shape"><span class="diamond-icon">?</span></div>
+          <div class="decision-label">${dec.label}</div>
+          <div class="decision-branches">
+            <span class="branch-yes">\u2713 ${dec.yesLabel}</span>
+            <span class="branch-no">\u2717 ${dec.noLabel}</span>
+          </div>
         </div>
       </div>`;
-    }).join("");
-    const overflow=items.length>30?`<div style="padding:6px;font-size:11px;color:var(--muted);text-align:center">+${items.length-30} more</div>`:"";
-    return`<div class="lane">
-      <div class="lane-header">
-        <span class="lane-title">${label}</span>
-        <span class="lane-count">${items.length}</span>
-      </div>
-      <div class="lane-body">${cards||"<div class='empty-state'>No items</div>"}${overflow}</div>
-    </div>`;
-  }).join("");
+    } else if(procIdx<PROCESSES.length-1){
+      html+=`<div class="decision-connector" style="padding:4px 0">
+        <div class="flow-arrow">
+          <svg width="20" height="20" viewBox="0 0 20 20" style="color:var(--muted)"><polygon points="10,16 4,8 16,8" fill="currentColor"/></svg>
+        </div>
+      </div>`;
+    }
+  });
+
+  document.getElementById("jobBoard").innerHTML=html;
 }
 
 // ---- Detail panel ----
@@ -389,6 +531,7 @@ function openDetail(taskId){
   if(!t)return;
   const d=t.details||{};
   const stage=STAGE_LABELS[t.workflow_stage]||t.workflow_stage;
+  const proc=STAGE_TO_PROCESS[t.workflow_stage]||{label:"Unknown",color:"var(--muted)"};
   const actions=getAvailableActions(t);
 
   document.getElementById("detailPanel").innerHTML=`
@@ -396,6 +539,7 @@ function openDetail(taskId){
       <h3>Task #${t.id}</h3>
       <button class="btn btn-sm" onclick="closeDetail()">Close</button>
     </div>
+    <div class="detail-process-tag" style="background:${proc.color}20;color:${proc.color};border:1px solid ${proc.color}40">${proc.label}</div>
     <div class="detail-field"><label>Job Number</label><div class="val">${t.job_number||"N/A"}</div></div>
     <div class="detail-field"><label>Current Stage</label><div class="val">${stage}</div></div>
     <div class="detail-field"><label>Status</label><div class="val"><span class="status-dot ${t.status==='completed'?'green':t.human_required?'amber':'blue'}"></span>${t.status}</div></div>
@@ -416,31 +560,41 @@ function getAvailableActions(t){
   const btns=[];
   if(t.status==="completed")return"<span style='color:var(--green);font-size:13px'>&#10003; Completed</span>";
 
-  const stageFlow={
-    job_setup:       {next:"budget_review",   label:"Submit for Budget Review", style:"btn-primary"},
-    budget_review:   {next:"task_assignment",  label:"Approve Budget",           style:"btn-green"},
-    task_assignment: {next:"material_check",   label:"Assign Purchaser",         style:"btn-primary"},
-    material_check:  {next:"pricing_validation",label:"Material Not Stocked - Need PO", style:"btn-amber"},
-    pricing_validation:{next:"vendor_coordination",label:"Prices Need Update",   style:"btn-amber"},
-    vendor_coordination:{next:"order_placement",label:"Coordination Complete",   style:"btn-green"},
-    order_placement: {next:"order_confirmation",label:"Order Placed",            style:"btn-green"},
-    order_confirmation:{next:"yard_pull",      label:"Confirmation Received",    style:"btn-green"},
-    yard_pull:       {next:"material_receiving",label:"Yard Pull Generated",     style:"btn-primary"},
-    material_receiving:{next:"completion_check",label:"Material Arrived",        style:"btn-green"},
-    completion_check:{next:"completed",        label:"All Material Present",     style:"btn-green"},
+  // Process 1: Job Intake & Budget
+  const p1Flow={
+    job_setup:       {next:"budget_review",    label:"Submit for Budget Review",  style:"btn-primary"},
+    budget_review:   {next:"task_assignment",   label:"Approve Budget",            style:"btn-green"},
+    task_assignment: {next:"material_check",    label:"Assign Purchaser",          style:"btn-primary"},
+  };
+  // Process 2: Material Sourcing
+  const p2Flow={
+    material_check:      {next:"pricing_validation",  label:"Not Stocked \u2014 Need PO",  style:"btn-amber"},
+    pricing_validation:  {next:"vendor_coordination",  label:"Pricing Confirmed",           style:"btn-green"},
+    vendor_coordination: {next:"order_placement",      label:"Coordination Complete",        style:"btn-green"},
+    order_placement:     {next:"order_confirmation",   label:"Order Placed",                 style:"btn-green"},
+  };
+  // Process 3: Order Fulfillment
+  const p3Flow={
+    order_confirmation:  {next:"yard_pull",           label:"Confirmation Received",   style:"btn-green"},
+    yard_pull:           {next:"material_receiving",   label:"Yard Pull Generated",     style:"btn-primary"},
+    material_receiving:  {next:"completion_check",     label:"Material Arrived",        style:"btn-green"},
+    completion_check:    {next:"completed",            label:"All Material Present",    style:"btn-green"},
   };
 
-  const flow=stageFlow[st];
+  const flow=p1Flow[st]||p2Flow[st]||p3Flow[st];
   if(flow){
     btns.push(`<button class="btn ${flow.style}" onclick="advanceTask(${t.id},'${flow.next}')">${flow.label}</button>`);
   }
 
+  // Decision point: Material Check branch
   if(st==="material_check"){
-    btns.push(`<button class="btn btn-green" onclick="advanceTask(${t.id},'yard_pull')">In Stock - Pull from Yard</button>`);
+    btns.push(`<button class="btn btn-green" onclick="advanceTask(${t.id},'yard_pull')">In Stock \u2014 Pull from Yard</button>`);
   }
+  // Decision point: Completion Check reorder branch
   if(st==="completion_check"){
-    btns.push(`<button class="btn btn-amber" onclick="advanceTask(${t.id},'vendor_coordination')">Missing Material - Reorder</button>`);
+    btns.push(`<button class="btn btn-amber" onclick="advanceTask(${t.id},'vendor_coordination')">Missing Material \u2014 Reorder</button>`);
   }
+  // Financial approval actions
   if(t.human_required){
     btns.push(`<button class="btn btn-green" onclick="approveTask(${t.id})">Approve (Financial)</button>`);
     btns.push(`<button class="btn btn-red" onclick="rejectTask(${t.id})">Reject</button>`);
@@ -485,9 +639,11 @@ function renderApprovals(){
   else{badge.style.display="none"}
   document.getElementById("approvalRows").innerHTML=rows.map(r=>{
     const d=r.details||{};
+    const proc=STAGE_TO_PROCESS[r.workflow_stage]||{label:"",color:"var(--muted)"};
     return`<tr>
       <td>${r.task_id}</td>
       <td>${r.job_number||""}</td>
+      <td><span style="color:${proc.color}">${proc.label}</span></td>
       <td>${STAGE_LABELS[r.workflow_stage]||r.workflow_stage}</td>
       <td><span class="pill ${r.priority==='high'?'pill-high':'pill-normal'}">${r.priority}</span></td>
       <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.blocked_reason||""}</td>
@@ -497,7 +653,7 @@ function renderApprovals(){
         <button class="btn btn-sm btn-red" onclick="rejectTask(${r.task_id})">Reject</button>
       </td>
     </tr>`;
-  }).join("")||"<tr><td colspan=7 class='empty-state'>No pending approvals</td></tr>";
+  }).join("")||"<tr><td colspan=8 class='empty-state'>No pending approvals</td></tr>";
 }
 
 // ---- Vendors ----

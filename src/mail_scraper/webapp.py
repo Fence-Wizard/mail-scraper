@@ -484,20 +484,29 @@ def workflow_lanes(
     limit_per_lane: int = Query(default=50, ge=1, le=300),
     _user: AppUser = Depends(_require_role("viewer")),
 ):
-    lane_order = [
-        "job_setup",
-        "budget_review",
-        "task_assignment",
-        "material_check",
-        "pricing_validation",
-        "vendor_coordination",
-        "order_placement",
-        "order_confirmation",
-        "yard_pull",
-        "material_receiving",
-        "completion_check",
-        "completed",
+    # Processes grouped by decision points
+    processes = [
+        {
+            "id": "job_intake",
+            "label": "Job Intake & Budget",
+            "stages": ["job_setup", "budget_review", "task_assignment"],
+        },
+        {
+            "id": "material_sourcing",
+            "label": "Material Sourcing",
+            "stages": ["material_check", "pricing_validation", "vendor_coordination", "order_placement"],
+        },
+        {
+            "id": "order_fulfillment",
+            "label": "Order Fulfillment",
+            "stages": [
+                "order_confirmation", "yard_pull", "material_receiving",
+                "completion_check", "completed",
+            ],
+        },
     ]
+    lane_order = [stage for proc in processes for stage in proc["stages"]]
+
     with db_session() as session:
         tasks = session.execute(select(Task).order_by(Task.id.desc())).scalars().all()
 
@@ -525,6 +534,7 @@ def workflow_lanes(
     return {
         "lane_order": lane_order,
         "lanes": lanes,
+        "processes": processes,
     }
 
 
