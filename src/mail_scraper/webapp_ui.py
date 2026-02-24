@@ -140,6 +140,22 @@ input,select,textarea{font-family:inherit}
 .status-dot.blue{background:var(--blue)}
 .empty-state{text-align:center;padding:30px 16px;color:var(--muted);font-size:12px}
 
+/* Intake Form */
+.intake-form-wrap{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.intake-form-header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.intake-form-icon{font-size:18px}
+.intake-form-body{padding:14px;display:flex;flex-direction:column;gap:10px}
+.form-row{display:flex;flex-direction:column;gap:3px}
+.form-row label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.form-row input,.form-row select,.form-row textarea{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:6px;font-size:12px;transition:border-color .15s}
+.form-row input:focus,.form-row select:focus,.form-row textarea:focus{outline:none;border-color:var(--blue)}
+.form-row textarea{resize:vertical}
+.form-row-2col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-divider{height:1px;background:var(--border);margin:2px 0}
+.form-actions{display:flex;gap:8px;margin-top:4px}
+.intake-form-footer{display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border-top:1px solid var(--border);background:var(--surface2)}
+.intake-form-footer-icon{font-size:14px;margin-top:1px}
+
 @media(max-width:900px){
   .sidebar{width:56px}
   .sidebar-brand img{height:24px}
@@ -178,6 +194,10 @@ input,select,textarea{font-family:inherit}
     </button>
     <button class="nav-item" data-page="activity">
       <span class="icon">&#8635;</span><span>Activity Log</span>
+    </button>
+    <div class="nav-section">Intake</div>
+    <button class="nav-item" data-page="intake">
+      <span class="icon">&#9993;</span><span>Email Intake</span>
     </button>
   </nav>
   <div class="sidebar-footer">
@@ -244,6 +264,100 @@ input,select,textarea{font-family:inherit}
     <!-- ACTIVITY -->
     <div class="page" id="page-activity">
       <div id="activityList"></div>
+    </div>
+
+    <!-- INTAKE -->
+    <div class="page" id="page-intake">
+      <div style="display:grid;grid-template-columns:380px 1fr;gap:16px;align-items:start">
+
+        <div class="intake-form-wrap">
+          <div class="intake-form-header">
+            <span class="intake-form-icon">&#9993;</span>
+            <div>
+              <div style="font-size:13px;font-weight:700">New Job Intake</div>
+              <div style="font-size:10px;color:var(--muted)">Submit manually or will auto-populate from forwarded email</div>
+            </div>
+          </div>
+          <div class="intake-form-body">
+            <div class="form-row">
+              <label>Source</label>
+              <select id="intakeSource">
+                <option value="manual">Manual Entry</option>
+                <option value="email_forward">Email Forward</option>
+                <option value="email_cc">Email CC</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label>Submitted By (PMA Email)</label>
+              <input type="email" id="intakeSubmittedBy" placeholder="pma@hurricanefence.com"/>
+            </div>
+            <div class="form-row">
+              <label>Subject / Description</label>
+              <input type="text" id="intakeSubject" placeholder="Budget for Job 2241028 - NC"/>
+            </div>
+            <div class="form-divider"></div>
+            <div class="form-row-2col">
+              <div class="form-row">
+                <label>Job Number</label>
+                <input type="text" id="intakeJobNumber" placeholder="2241028"/>
+              </div>
+              <div class="form-row">
+                <label>Location</label>
+                <input type="text" id="intakeLocation" placeholder="North Carolina"/>
+              </div>
+            </div>
+            <div class="form-row-2col">
+              <div class="form-row">
+                <label>Budget Amount</label>
+                <input type="number" id="intakeBudget" placeholder="0.00" step="0.01"/>
+              </div>
+              <div class="form-row">
+                <label>Priority</label>
+                <select id="intakePriority">
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row-2col">
+              <div class="form-row">
+                <label>Vendor (if known)</label>
+                <input type="text" id="intakeVendor" placeholder="Optional"/>
+              </div>
+              <div class="form-row">
+                <label>PO Number (if exists)</label>
+                <input type="text" id="intakePO" placeholder="Optional"/>
+              </div>
+            </div>
+            <div class="form-row">
+              <label>Notes</label>
+              <textarea id="intakeNotes" rows="3" placeholder="Additional context, forwarded email body, etc."></textarea>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="submitIntake()" style="flex:1">Submit to Job Board</button>
+              <button class="btn" onclick="clearIntakeForm()">Clear</button>
+            </div>
+          </div>
+          <div class="intake-form-footer">
+            <span class="intake-form-footer-icon">&#128268;</span>
+            <div>
+              <div style="font-size:10px;font-weight:600;color:var(--cyan)">Future: Auto-intake via Email</div>
+              <div style="font-size:9px;color:var(--muted)">PMAs will CC or forward to a dedicated inbox. The system will parse job number, budget, and vendor automatically.</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 style="font-size:13px;margin-bottom:8px;color:var(--cyan)">Recent Intake Submissions</h3>
+          <div class="table-wrap" style="max-height:calc(100vh - 200px)">
+            <table class="data-table">
+              <thead><tr><th>ID</th><th>Job #</th><th>Submitted By</th><th>Vendor</th><th>Amount</th><th>Stage</th><th>Priority</th><th>Source</th><th>Date</th></tr></thead>
+              <tbody id="intakeRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
     </div>
 
   </div>
@@ -601,9 +715,62 @@ function renderActivity(){
     </div>`).join("")||"<div class='empty-state'>No activity recorded</div>";
 }
 
-async function refreshAll(){await loadAll()}
+// ---- Intake ----
+async function submitIntake(){
+  const body={
+    job_number:document.getElementById("intakeJobNumber").value||null,
+    location:document.getElementById("intakeLocation").value||null,
+    vendor:document.getElementById("intakeVendor").value||null,
+    budget_amount:parseFloat(document.getElementById("intakeBudget").value)||null,
+    po_number:document.getElementById("intakePO").value||null,
+    submitted_by:document.getElementById("intakeSubmittedBy").value||null,
+    subject:document.getElementById("intakeSubject").value||null,
+    notes:document.getElementById("intakeNotes").value||null,
+    priority:document.getElementById("intakePriority").value,
+    source:document.getElementById("intakeSource").value,
+  };
+  const res=await api("/intake",{method:"POST",body:JSON.stringify(body)});
+  if(res&&res.task_id){
+    clearIntakeForm();
+    await loadIntakes();
+    await loadAll();
+  }
+}
+
+function clearIntakeForm(){
+  ["intakeJobNumber","intakeLocation","intakeVendor","intakeBudget","intakePO","intakeSubmittedBy","intakeSubject","intakeNotes"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("intakePriority").value="normal";
+  document.getElementById("intakeSource").value="manual";
+}
+
+async function loadIntakes(){
+  const rows=await api("/intake/recent?limit=50");
+  renderIntakes(rows||[]);
+}
+
+function renderIntakes(rows){
+  const STAGE_LABELS_LOCAL=Object.fromEntries(ALL_STAGES);
+  document.getElementById("intakeRows").innerHTML=rows.map(r=>{
+    const d=r.details||{};
+    const dateStr=r.created_at?new Date(r.created_at).toLocaleDateString():"";
+    return`<tr>
+      <td>${r.id}</td>
+      <td style="font-weight:600;color:var(--cyan)">${r.job_number||""}</td>
+      <td>${d.submitted_by||""}</td>
+      <td>${d.vendor||""}</td>
+      <td>${d.total!=null?money(d.total):""}</td>
+      <td>${STAGE_LABELS_LOCAL[r.workflow_stage]||r.workflow_stage}</td>
+      <td><span class="pill ${r.priority==='high'?'pill-high':'pill-normal'}">${r.priority}</span></td>
+      <td style="font-size:10px;color:var(--muted)">${d.source||""}</td>
+      <td style="font-size:10px;color:var(--muted)">${dateStr}</td>
+    </tr>`;
+  }).join("")||"<tr><td colspan=9 class='empty-state'>No intake submissions yet</td></tr>";
+}
+
+async function refreshAll(){await loadAll();await loadIntakes()}
 loadAll();
-setInterval(loadAll,30000);
+loadIntakes();
+setInterval(()=>{loadAll();loadIntakes()},30000);
 </script>
 </body>
 </html>"""

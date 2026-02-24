@@ -95,6 +95,122 @@ class AdvanceStageRequest(BaseModel):
     notes: str | None = None
 
 
+class IntakeSubmission(BaseModel):
+    job_number: str | None = None
+    location: str | None = None
+    vendor: str | None = None
+    budget_amount: float | None = None
+    po_number: str | None = None
+    submitted_by: str | None = None
+    subject: str | None = None
+    notes: str | None = None
+    priority: str = Field(default="normal", pattern="^(normal|high)$")
+    source: str = Field(default="manual", pattern="^(manual|email_forward|email_cc)$")
+
+
+# ---- Intake ----
+
+
+@app.post("/intake")
+def submit_intake(
+    payload: IntakeSubmission,
+    user: AppUser = Depends(_require_role("buyer")),
+):
+    """Create a new job from an intake submission (manual form or future email hook)."""
+    human_required = (payload.budget_amount or 0) >= 25000
+    with db_session() as session:
+        task = Task(
+            task_type="job_setup",
+            status="open",
+            priority=payload.priority,
+            job_number=payload.job_number,
+            workflow_spine="intake",
+            workflow_stage="job_setup",
+            human_required=human_required,
+            auto_allowed=not human_required,
+            blocked_reason="High-value budget requires approval" if human_required else None,
+            source_folder_path=payload.location,
+            last_event_at=datetime.utcnow(),
+            details_json={
+                "vendor": payload.vendor,
+                "po_number": payload.po_number,
+                "total": payload.budget_amount,
+                "location": payload.location,
+                "subject": payload.subject,
+                "notes": payload.notes,
+                "submitted_by": payload.submitted_by or user.email,
+                "source": payload.source,
+            },
+        )
+        session.add(task)
+        session.flush()
+        task_id = task.id
+
+        session.add(
+            TaskEvent(
+                task_id=task_id,
+                event_type="intake_submitted",
+                notes=f"Submitted via {payload.source} by {payload.submitted_by or user.email}",
+                payload_json={
+                    "job_number": payload.job_number,
+                    "vendor": payload.vendor,
+                    "budget_amount": payload.budget_amount,
+                    "source": payload.source,
+                },
+            )
+        )
+        session.add(
+            WorkflowAction(
+                task_id=task_id,
+                action_type="intake_submitted",
+                action_mode="human",
+                action_status="applied",
+                actor_email=payload.submitted_by or user.email,
+                notes=payload.subject or f"Job {payload.job_number or 'N/A'} intake",
+                payload_json={
+                    "job_number": payload.job_number,
+                    "vendor": payload.vendor,
+                    "budget_amount": payload.budget_amount,
+                },
+            )
+        )
+
+    return {
+        "task_id": task_id,
+        "status": "created",
+        "workflow_stage": "job_setup",
+        "human_required": human_required,
+    }
+
+
+@app.get("/intake/recent")
+def recent_intakes(
+    limit: int = Query(default=50, ge=1, le=500),
+    _user: AppUser = Depends(_require_role("viewer")),
+):
+    """List recent intake submissions (tasks created via intake)."""
+    with db_session() as session:
+        rows = session.execute(
+            select(Task)
+            .where(Task.workflow_spine == "intake")
+            .order_by(Task.id.desc())
+            .limit(limit)
+        ).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "job_number": r.job_number,
+            "status": r.status,
+            "priority": r.priority,
+            "workflow_stage": r.workflow_stage,
+            "human_required": r.human_required,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "details": r.details_json or {},
+        }
+        for r in rows
+    ]
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     ensure_schema()
