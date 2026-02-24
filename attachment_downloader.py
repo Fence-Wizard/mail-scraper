@@ -1,54 +1,25 @@
-import os
-import json
 import asyncio
-import logging
 from pathlib import Path
-from graph_client import GraphClient
-from fetch_config import settings
+import sys
 
-OUTPUT_DIR = Path("raw_data")
-logger = logging.getLogger(__name__)
+SRC_PATH = Path(__file__).resolve().parent / "src"
+if SRC_PATH.exists() and str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
 
-async def download_attachments():
-    client = GraphClient()
-    await client.authenticate()
+import argparse
 
-    # Walk all message JSON files
-    for root, dirs, files in os.walk(OUTPUT_DIR):
-        for file in files:
-            if file.endswith(".json") and file != "_folder.json":
-                file_path = Path(root) / file
-                with open(file_path, "r", encoding="utf-8") as f:
-                    msg_json = json.load(f)
+from mail_scraper.operations import run_download_attachments
 
-                message_id = msg_json["id"]
-                folder_path = Path(root)
-                attachment_dir = folder_path / f"{message_id}_attachments"
-                attachment_dir.mkdir(exist_ok=True)
 
-                try:
-                    logger.info(f"Fetching attachments for message {message_id}")
-                    url = f"/users/{settings.user_id}/messages/{message_id}/attachments"
-                    resp = await client._get(url)
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--limit", type=int, default=None, help="max attachments to download")
+    parser.add_argument("--mailbox-key", type=str, default=None, help="optional mailbox key")
+    args = parser.parse_args()
 
-                    for attachment in resp.get("value", []):
-                        name = attachment.get("name", "unnamed")
-                        content_bytes = attachment.get("contentBytes")
+    processed = asyncio.run(run_download_attachments(limit=args.limit, mailbox_key=args.mailbox_key))
+    print(f"✅ Attachment download complete. Files processed: {processed}")
 
-                        if content_bytes is None:
-                            logger.warning(f"Skipping non-file attachment: {name}")
-                            continue
-
-                        file_path = attachment_dir / name
-                        with open(file_path, "wb") as f:
-                            f.write(bytes(content_bytes, encoding="utf-8"))
-
-                        logger.info(f"Saved attachment: {file_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch or save attachment for {message_id}: {e}")
-
-    await client.close()
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(download_attachments())
+    main()

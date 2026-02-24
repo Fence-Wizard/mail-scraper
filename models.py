@@ -1,32 +1,13 @@
-# models.py
-from pydantic import BaseModel
-from typing import List, Optional
+"""Backward-compatible model import shim.
 
-class Folder(BaseModel):
-    id: str
-    displayName: str
-    childFolderCount: int
+Prefer importing from `mail_scraper.models`.
+"""
 
-class EmailAddress(BaseModel):
-    name: Optional[str]
-    address: str
+from pathlib import Path
+import sys
 
-class FromField(BaseModel):
-    emailAddress: EmailAddress
+SRC_PATH = Path(__file__).resolve().parent / "src"
+if SRC_PATH.exists() and str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
 
-class Attachment(BaseModel):
-    id: str
-    name: str
-    contentType: Optional[str]
-    size: Optional[int]
-    # add more as needed
-
-class Message(BaseModel):
-    id: str
-    subject: Optional[str]
-    from_: Optional[FromField] = None  # use alias in client
-    receivedDateTime: Optional[str]
-    body: Optional[dict]
-    conversationId: Optional[str]
-    inReplyTo: Optional[str]
-    attachments: List[Attachment] = []
+from mail_scraper.models import Attachment, EmailAddress, Folder, FromField, Message  # noqa: E402,F401

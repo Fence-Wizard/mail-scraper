@@ -1,7 +1,10 @@
-pydantic>=1.10.0
+pydantic>=2.7
 httpx>=0.24.0
 tenacity>=8.2.2
 structlog>=23.1.0
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+psycopg[binary]>=3.2.0
 transformers>=4.30.0
 pymdptoolbox<5.0,>=4.0b1
 python-dotenv>=1.0
@@ -19,3 +22,5 @@ pillow>=11.0.0
 pytesseract>=0.3.10
 toml>=0.10.2
 pydantic-settings>=2.0.0
+fastapi>=0.116.0
+uvicorn>=0.35.0

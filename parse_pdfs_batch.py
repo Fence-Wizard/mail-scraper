@@ -67,9 +67,17 @@ KNOWN_VENDOR_HINTS = {
 
 def read_message_metadata(attachment_dir: Path):
     meta = {"sender": None, "receivedDateTime": None, "subject": None}
+    candidates = []
+    # Legacy layout companion JSON: <graph_message_id>.json beside <graph_message_id>_attachments dir.
     msg_id = attachment_dir.name.replace("_attachments", "")
-    candidate = attachment_dir.with_name(f"{msg_id}.json")
-    if candidate.exists():
+    candidates.append(attachment_dir.with_name(f"{msg_id}.json"))
+    # New layout has compact folder names and no local message JSON companion today.
+    # Keep this fallback for future compatibility if metadata sidecars are added.
+    candidates.append(attachment_dir / "message.json")
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
         try:
             data = json.loads(candidate.read_text(encoding="utf-8", errors="ignore"))
             frm = data.get("from") or data.get("from_") or {}
@@ -77,8 +85,9 @@ def read_message_metadata(attachment_dir: Path):
             meta["sender"] = email
             meta["receivedDateTime"] = data.get("receivedDateTime")
             meta["subject"] = data.get("subject")
+            break
         except Exception:
-            pass
+            continue
     return meta
 
 def infer_vendor_from(sender: str | None, filename: str):
@@ -134,13 +143,12 @@ def extract_fields_from_pdf(pdf_path: Path):
     return po, job, total, inv_date
 
 def find_all_pdfs(root: Path):
-    pdfs = []
-    for folder, _, files in os.walk(root):
-        if folder.endswith("_attachments"):
-            for f in files:
-                if f.lower().endswith(".pdf"):
-                    pdfs.append(Path(folder) / f)
-    return sorted(pdfs)
+    # Support both legacy and new downloader layouts:
+    # - legacy: raw_data/.../<graph_message_id>_attachments/*.pdf
+    # - current: raw_data/.../m<message_pk>_<hash>/*.pdf
+    if not root.exists():
+        return []
+    return sorted(p for p in root.rglob("*.pdf") if p.is_file())
 
 def main():
     pdfs = find_all_pdfs(ROOT)

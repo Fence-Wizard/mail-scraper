@@ -41,13 +41,15 @@ class MatrixRain:
         self._cols = []
         self._width = 0
         self._height = 0
+        self._status = "starting..."
 
     def _isatty(self):
         return sys.stdout.isatty() and os.environ.get("TERM", "") != "dumb"
 
     def _resize(self):
         size = shutil.get_terminal_size(fallback=(100, 28))
-        self._width, self._height = size.columns, max(10, size.lines - 1)
+        # Keep one terminal line reserved for a live status/progress bar.
+        self._width, self._height = size.columns, max(8, size.lines - 2)
 
         # Initialize column states: for each column, a list of y positions forming a streak
         self._cols = []
@@ -65,6 +67,12 @@ class MatrixRain:
         self._resize()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    def set_status(self, text: str):
+        if text is None:
+            text = ""
+        with self._lock:
+            self._status = str(text)
 
     def stop(self):
         if not self.enabled:
@@ -121,6 +129,12 @@ class MatrixRain:
                         line_chars.append(" ")
                     buf.append("".join(line_chars))
 
+                with self._lock:
+                    status = self._status
+                if len(status) > self._width:
+                    status = status[: self._width - 3] + "..."
+                buf.append("\x1b[2K" + GREEN + status.ljust(self._width) + RESET)
+
                 # Advance streaks
                 for x, streak in enumerate(self._cols):
                     if streak:
@@ -164,6 +178,6 @@ def matrix_rain(enabled=True):
     rain = MatrixRain(enabled=enabled)
     try:
         rain.start()
-        yield
+        yield rain
     finally:
         rain.stop()

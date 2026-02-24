@@ -1,30 +1,13 @@
-# fetch_config.py
-from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+"""Backward-compatible config import shim.
 
-class Settings(BaseSettings):
-    # Azure / Graph API
-    tenant_id: str
-    client_id: str
-    client_secret: str
-    # The mailbox we’re crawling
-    user_id: str
+Prefer importing from `mail_scraper.config`.
+"""
 
-    # The root folder name under which jobs are organized
-    root_folder_name: str = "2024 Jobs"
+from pathlib import Path
+import sys
 
-    # load from .env file
-    model_config = ConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-    )
+SRC_PATH = Path(__file__).resolve().parent / "src"
+if SRC_PATH.exists() and str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
 
-    # Toggle verbose debug logging
-    debug: bool = False
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
-# instantiate at import time
-settings = Settings()
+from mail_scraper.config import Settings, settings  # noqa: E402,F401

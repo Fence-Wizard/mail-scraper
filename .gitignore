@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+raw_data/
+analysis_output/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+invoice_summary.csv
+invoice_misses.log
