@@ -710,10 +710,11 @@ function renderFlowNavigator(groupCounts,byStage){
       <div class="flow-step-count">${count}</div>
     </div>`;
   }).join("");
+  const allCount=groupCounts.reduce((sum,g)=>sum+g.count,0);
   document.getElementById("flowSteps").innerHTML=`<div class="flow-step ${focusedGroup==="all"?"active":""}" onclick="setFocusedGroup('all')">
       <div class="flow-step-num">*</div>
       <div><div style="font-size:11px;font-weight:600">All workflow groups</div><div class="flow-step-meta">Full end-to-end purchasing board</div></div>
-      <div class="flow-step-count">${STATE.tasks.length}</div>
+      <div class="flow-step-count">${allCount}</div>
     </div>`+steps;
 
   const attention=[...STATE.tasks]
