@@ -21,7 +21,7 @@ from .db_schema import (
     WorkflowAction,
 )
 
-app = FastAPI(title="Procurement Webapp API", version="0.1.0")
+app = FastAPI(title="Procurement Webapp API", version="2.0.0")
 
 
 def _now_iso() -> str:
@@ -44,6 +44,71 @@ def _require_role(role_required: str) -> Callable[[str | None], AppUser]:
 
     return dependency
 
+
+def _task_dict(row: Task) -> dict:
+    """Serialize a Task row to a dict for API responses."""
+    return {
+        "id": row.id,
+        "task_type": row.task_type,
+        "status": row.status,
+        "priority": row.priority,
+        "job_number": row.job_number,
+        "workflow_spine": row.workflow_spine,
+        "workflow_stage": row.workflow_stage,
+        "human_required": row.human_required,
+        "auto_allowed": row.auto_allowed,
+        "blocked_reason": row.blocked_reason,
+        "source_folder_path": row.source_folder_path,
+        "source_message_id": row.source_message_id,
+        "source_document_id": row.source_document_id,
+        "assigned_purchaser_email": row.assigned_purchaser_email,
+        "assigned_by_email": row.assigned_by_email,
+        "material_in_stock": row.material_in_stock,
+        "can_pull_extra": row.can_pull_extra,
+        "po_provided": row.po_provided,
+        "prices_valid": row.prices_valid,
+        "all_material_present": row.all_material_present,
+        "vendor_coord_price": row.vendor_coord_price,
+        "vendor_coord_delivery_time": row.vendor_coord_delivery_time,
+        "vendor_coord_delivery_location": row.vendor_coord_delivery_location,
+        "expected_delivery_date": row.expected_delivery_date.isoformat() if row.expected_delivery_date else None,
+        "backorder_notes": row.backorder_notes,
+        "decision_path": row.decision_path,
+        "details": row.details_json,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def _add_event(session: Session, task: Task, event_type: str, notes: str, payload: dict | None = None) -> None:
+    session.add(TaskEvent(
+        task_id=task.id,
+        event_type=event_type,
+        message_id=task.source_message_id,
+        document_id=task.source_document_id,
+        notes=notes,
+        payload_json=payload or {},
+    ))
+
+
+def _add_action(session: Session, task: Task, action_type: str, actor_email: str, notes: str, payload: dict | None = None) -> None:
+    session.add(WorkflowAction(
+        task_id=task.id,
+        action_type=action_type,
+        action_mode="human",
+        action_status="applied",
+        actor_email=actor_email,
+        notes=notes,
+        payload_json=payload or {},
+    ))
+
+
+def _append_decision(task: Task, decision: str) -> None:
+    path = list(task.decision_path or [])
+    path.append({"decision": decision, "at": _now_iso(), "stage": task.workflow_stage})
+    task.decision_path = path
+
+
+# ---- Request models ----
 
 class RfqCreateRequest(BaseModel):
     job_number: str | None = None
@@ -108,6 +173,42 @@ class IntakeSubmission(BaseModel):
     source: str = Field(default="manual", pattern="^(manual|email_forward|email_cc)$")
 
 
+class BudgetReviewRequest(BaseModel):
+    budget_good: bool
+    quality_errors: str | None = None
+    notes: str | None = None
+
+
+class AssignPurchaserRequest(BaseModel):
+    purchaser_email: str
+    notes: str | None = None
+
+
+class MaterialCheckRequest(BaseModel):
+    material_in_stock: bool
+    can_pull_extra: bool = False
+    notes: str | None = None
+
+
+class PricingCheckRequest(BaseModel):
+    po_provided: bool
+    prices_valid: bool | None = None
+    notes: str | None = None
+
+
+class VendorCoordinationRequest(BaseModel):
+    price: str | None = None
+    delivery_time: str | None = None
+    delivery_location: str | None = None
+    notes: str | None = None
+
+
+class CompletionCheckRequest(BaseModel):
+    all_material_present: bool
+    backorder_notes: str | None = None
+    expected_delivery_date: str | None = None
+
+
 # ---- Intake ----
 
 
@@ -117,7 +218,6 @@ def submit_intake(
     user: AppUser = Depends(_require_role("buyer")),
 ):
     """Create a new job from an intake submission (manual form or future email hook)."""
-    human_required = (payload.budget_amount or 0) >= 25000
     with db_session() as session:
         task = Task(
             task_type="job_setup",
@@ -126,11 +226,12 @@ def submit_intake(
             job_number=payload.job_number,
             workflow_spine="intake",
             workflow_stage="job_setup",
-            human_required=human_required,
-            auto_allowed=not human_required,
-            blocked_reason="High-value budget requires approval" if human_required else None,
+            human_required=False,
+            auto_allowed=True,
             source_folder_path=payload.location,
             last_event_at=datetime.utcnow(),
+            po_provided=bool(payload.po_number),
+            decision_path=[],
             details_json={
                 "vendor": payload.vendor,
                 "po_number": payload.po_number,
@@ -145,42 +246,14 @@ def submit_intake(
         session.add(task)
         session.flush()
         task_id = task.id
+        _add_event(session, task, "intake_submitted",
+                    f"Submitted via {payload.source} by {payload.submitted_by or user.email}",
+                    {"job_number": payload.job_number, "vendor": payload.vendor, "budget_amount": payload.budget_amount, "source": payload.source})
+        _add_action(session, task, "intake_submitted", payload.submitted_by or user.email,
+                     payload.subject or f"Job {payload.job_number or 'N/A'} intake",
+                     {"job_number": payload.job_number, "vendor": payload.vendor, "budget_amount": payload.budget_amount})
 
-        session.add(
-            TaskEvent(
-                task_id=task_id,
-                event_type="intake_submitted",
-                notes=f"Submitted via {payload.source} by {payload.submitted_by or user.email}",
-                payload_json={
-                    "job_number": payload.job_number,
-                    "vendor": payload.vendor,
-                    "budget_amount": payload.budget_amount,
-                    "source": payload.source,
-                },
-            )
-        )
-        session.add(
-            WorkflowAction(
-                task_id=task_id,
-                action_type="intake_submitted",
-                action_mode="human",
-                action_status="applied",
-                actor_email=payload.submitted_by or user.email,
-                notes=payload.subject or f"Job {payload.job_number or 'N/A'} intake",
-                payload_json={
-                    "job_number": payload.job_number,
-                    "vendor": payload.vendor,
-                    "budget_amount": payload.budget_amount,
-                },
-            )
-        )
-
-    return {
-        "task_id": task_id,
-        "status": "created",
-        "workflow_stage": "job_setup",
-        "human_required": human_required,
-    }
+    return {"task_id": task_id, "status": "created", "workflow_stage": "job_setup"}
 
 
 @app.get("/intake/recent")
@@ -188,7 +261,6 @@ def recent_intakes(
     limit: int = Query(default=50, ge=1, le=500),
     _user: AppUser = Depends(_require_role("viewer")),
 ):
-    """List recent intake submissions (tasks created via intake)."""
     with db_session() as session:
         rows = session.execute(
             select(Task)
@@ -204,11 +276,384 @@ def recent_intakes(
             "priority": r.priority,
             "workflow_stage": r.workflow_stage,
             "human_required": r.human_required,
+            "assigned_purchaser_email": r.assigned_purchaser_email,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "details": r.details_json or {},
         }
         for r in rows
     ]
+
+
+# ---- Decision-Gate Workflow Endpoints ----
+# These map directly to the diamond gates in the workflow diagram.
+
+
+@app.post("/workflow/budget-review/{task_id}")
+def budget_review(
+    task_id: int,
+    payload: BudgetReviewRequest,
+    user: AppUser = Depends(_require_role("approver")),
+):
+    """Decision gate: Budget Quality Check.
+    If budget_good=true, advance to task_assignment.
+    If budget_good=false, loop back to job_setup for PM revision.
+    """
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.workflow_stage not in ("job_setup", "budget_review"):
+            raise HTTPException(status_code=409, detail=f"Task is at {task.workflow_stage}, not budget_review")
+
+        old_stage = task.workflow_stage
+        task.last_event_at = datetime.utcnow()
+
+        if payload.budget_good:
+            task.workflow_stage = "task_assignment"
+            task.human_required = True
+            task.blocked_reason = "Needs purchaser assignment by Project Manager"
+            _append_decision(task, "budget_approved")
+            notes = payload.notes or "Budget approved - ready for purchaser assignment"
+        else:
+            task.workflow_stage = "job_setup"
+            task.human_required = True
+            task.blocked_reason = f"Quality errors: {payload.quality_errors or 'See notes'}"
+            _append_decision(task, "budget_rejected")
+            notes = f"Budget rejected: {payload.quality_errors or payload.notes or 'Quality errors found'}"
+
+        _add_event(session, task, "budget_review", notes, {"budget_good": payload.budget_good, "from": old_stage, "to": task.workflow_stage})
+        _add_action(session, task, "budget_review", user.email, notes, {"budget_good": payload.budget_good})
+        return {"task_id": task.id, "new_stage": task.workflow_stage, "budget_good": payload.budget_good}
+
+
+@app.post("/workflow/assign-purchaser/{task_id}")
+def assign_purchaser(
+    task_id: int,
+    payload: AssignPurchaserRequest,
+    user: AppUser = Depends(_require_role("approver")),
+):
+    """Task assigned to Purchaser by Project Manager assignments."""
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.workflow_stage != "task_assignment":
+            raise HTTPException(status_code=409, detail=f"Task is at {task.workflow_stage}, not task_assignment")
+
+        task.assigned_purchaser_email = payload.purchaser_email
+        task.assigned_by_email = user.email
+        task.workflow_stage = "material_check"
+        task.human_required = True
+        task.blocked_reason = "Purchaser must check material availability"
+        task.last_event_at = datetime.utcnow()
+        _append_decision(task, f"assigned:{payload.purchaser_email}")
+
+        notes = payload.notes or f"Assigned to {payload.purchaser_email}"
+        _add_event(session, task, "purchaser_assigned", notes, {"purchaser": payload.purchaser_email, "assigned_by": user.email})
+        _add_action(session, task, "purchaser_assigned", user.email, notes, {"purchaser": payload.purchaser_email})
+        return {"task_id": task.id, "new_stage": "material_check", "assigned_to": payload.purchaser_email}
+
+
+@app.post("/workflow/material-check/{task_id}")
+def material_check(
+    task_id: int,
+    payload: MaterialCheckRequest,
+    user: AppUser = Depends(_require_role("buyer")),
+):
+    """Decision gate: Is Material in Stock? + Can we pull from extra materials?
+
+    Branching logic from the diagram:
+    - In stock + can pull extra -> Reserve materials -> yard_pull
+    - In stock + cannot pull extra -> yard_pull (generate yard pull)
+    - Not in stock + can pull extra -> Reserve materials -> yard_pull
+    - Not in stock + cannot pull extra -> Check if PO provided -> pricing_validation
+    """
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.workflow_stage != "material_check":
+            raise HTTPException(status_code=409, detail=f"Task is at {task.workflow_stage}, not material_check")
+
+        task.material_in_stock = payload.material_in_stock
+        task.can_pull_extra = payload.can_pull_extra
+        task.last_event_at = datetime.utcnow()
+
+        if payload.material_in_stock or payload.can_pull_extra:
+            # Material available path: Reserve & generate yard pull
+            task.workflow_stage = "yard_pull"
+            task.human_required = False
+            task.auto_allowed = True
+            task.blocked_reason = None
+            decision = "material_available"
+            notes = payload.notes or "Material available - generating yard pull"
+            if payload.can_pull_extra:
+                notes = payload.notes or "Pulling from extra materials - reserve & generate yard pull"
+                decision = "pull_extra_materials"
+        else:
+            # Not in stock, can't pull extra -> procurement path
+            task.workflow_stage = "pricing_validation"
+            task.human_required = True
+            task.blocked_reason = "Material not available - check if PO was provided"
+            decision = "material_not_available"
+            notes = payload.notes or "Material not in stock - proceeding to procurement"
+
+        _append_decision(task, decision)
+        _add_event(session, task, "material_check", notes,
+                   {"in_stock": payload.material_in_stock, "can_pull_extra": payload.can_pull_extra, "to": task.workflow_stage})
+        _add_action(session, task, "material_check", user.email, notes,
+                    {"in_stock": payload.material_in_stock, "can_pull_extra": payload.can_pull_extra})
+        return {"task_id": task.id, "new_stage": task.workflow_stage, "in_stock": payload.material_in_stock, "can_pull_extra": payload.can_pull_extra}
+
+
+@app.post("/workflow/pricing-check/{task_id}")
+def pricing_check(
+    task_id: int,
+    payload: PricingCheckRequest,
+    user: AppUser = Depends(_require_role("buyer")),
+):
+    """Decision gate: Was PO provided? + Are prices still valid?
+
+    Branching logic:
+    - PO provided + prices valid -> order_placement (Order Material)
+    - PO provided + prices NOT valid -> vendor_coordination
+    - No PO provided -> vendor_coordination
+    """
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.workflow_stage != "pricing_validation":
+            raise HTTPException(status_code=409, detail=f"Task is at {task.workflow_stage}, not pricing_validation")
+
+        task.po_provided = payload.po_provided
+        task.prices_valid = payload.prices_valid
+        task.last_event_at = datetime.utcnow()
+
+        if payload.po_provided and payload.prices_valid:
+            task.workflow_stage = "order_placement"
+            task.human_required = True
+            task.blocked_reason = "Ready to place order"
+            decision = "po_valid"
+            notes = payload.notes or "PO provided with valid pricing - ready to order"
+        else:
+            task.workflow_stage = "vendor_coordination"
+            task.human_required = True
+            if not payload.po_provided:
+                task.blocked_reason = "No PO - vendor coordination needed for pricing"
+                decision = "no_po"
+                notes = payload.notes or "No PO provided - needs vendor coordination"
+            else:
+                task.blocked_reason = "Prices outdated - vendor coordination needed"
+                decision = "prices_invalid"
+                notes = payload.notes or "PO prices no longer valid - needs vendor coordination"
+
+        _append_decision(task, decision)
+        _add_event(session, task, "pricing_check", notes,
+                   {"po_provided": payload.po_provided, "prices_valid": payload.prices_valid, "to": task.workflow_stage})
+        _add_action(session, task, "pricing_check", user.email, notes,
+                    {"po_provided": payload.po_provided, "prices_valid": payload.prices_valid})
+        return {"task_id": task.id, "new_stage": task.workflow_stage, "po_provided": payload.po_provided, "prices_valid": payload.prices_valid}
+
+
+@app.post("/workflow/vendor-coordination/{task_id}")
+def vendor_coordination(
+    task_id: int,
+    payload: VendorCoordinationRequest,
+    user: AppUser = Depends(_require_role("buyer")),
+):
+    """Vendor Coordination: Price, Delivery Time, Delivery Location.
+    After coordination is complete, advance to order_placement.
+    """
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.workflow_stage != "vendor_coordination":
+            raise HTTPException(status_code=409, detail=f"Task is at {task.workflow_stage}, not vendor_coordination")
+
+        task.vendor_coord_price = payload.price
+        task.vendor_coord_delivery_time = payload.delivery_time
+        task.vendor_coord_delivery_location = payload.delivery_location
+        task.workflow_stage = "order_placement"
+        task.human_required = True
+        task.blocked_reason = "Vendor coordination complete - ready to place order"
+        task.last_event_at = datetime.utcnow()
+        _append_decision(task, "vendor_coordination_complete")
+
+        notes = payload.notes or f"Coordinated: price={payload.price}, delivery={payload.delivery_time}, location={payload.delivery_location}"
+        _add_event(session, task, "vendor_coordination", notes,
+                   {"price": payload.price, "delivery_time": payload.delivery_time, "delivery_location": payload.delivery_location})
+        _add_action(session, task, "vendor_coordination", user.email, notes,
+                    {"price": payload.price, "delivery_time": payload.delivery_time, "delivery_location": payload.delivery_location})
+        return {"task_id": task.id, "new_stage": "order_placement"}
+
+
+@app.post("/workflow/place-order/{task_id}")
+def place_order(
+    task_id: int,
+    user: AppUser = Depends(_require_role("buyer")),
+    notes: str | None = Query(default=None),
+):
+    """Order Material - advance to order_confirmation to await vendor confirmation and lead times."""
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.workflow_stage != "order_placement":
+            raise HTTPException(status_code=409, detail=f"Task is at {task.workflow_stage}, not order_placement")
+
+        task.workflow_stage = "order_confirmation"
+        task.human_required = True
+        task.blocked_reason = "Awaiting order confirmation and lead times from vendor"
+        task.last_event_at = datetime.utcnow()
+        _append_decision(task, "order_placed")
+
+        msg = notes or "Order placed - awaiting vendor confirmation"
+        _add_event(session, task, "order_placed", msg, {"to": "order_confirmation"})
+        _add_action(session, task, "order_placed", user.email, msg, {})
+        return {"task_id": task.id, "new_stage": "order_confirmation"}
+
+
+@app.post("/workflow/confirm-order/{task_id}")
+def confirm_order(
+    task_id: int,
+    user: AppUser = Depends(_require_role("buyer")),
+    notes: str | None = Query(default=None),
+    expected_delivery_date: str | None = Query(default=None),
+):
+    """Order Confirmation received with lead times -> Generate Yard Pull -> Material Arrives."""
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.workflow_stage != "order_confirmation":
+            raise HTTPException(status_code=409, detail=f"Task is at {task.workflow_stage}, not order_confirmation")
+
+        if expected_delivery_date:
+            try:
+                task.expected_delivery_date = datetime.fromisoformat(expected_delivery_date)
+            except ValueError:
+                pass
+        task.workflow_stage = "yard_pull"
+        task.human_required = False
+        task.auto_allowed = True
+        task.blocked_reason = None
+        task.last_event_at = datetime.utcnow()
+        _append_decision(task, "order_confirmed")
+
+        msg = notes or "Order confirmed - generating yard pull"
+        _add_event(session, task, "order_confirmed", msg, {"expected_delivery": expected_delivery_date})
+        _add_action(session, task, "order_confirmed", user.email, msg, {"expected_delivery": expected_delivery_date})
+        return {"task_id": task.id, "new_stage": "yard_pull"}
+
+
+@app.post("/workflow/material-arrives/{task_id}")
+def material_arrives(
+    task_id: int,
+    user: AppUser = Depends(_require_role("buyer")),
+    notes: str | None = Query(default=None),
+):
+    """Material arrives at yard -> advance to completion_check."""
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.workflow_stage not in ("yard_pull", "material_receiving"):
+            raise HTTPException(status_code=409, detail=f"Task is at {task.workflow_stage}, expected yard_pull or material_receiving")
+
+        task.workflow_stage = "completion_check"
+        task.human_required = True
+        task.blocked_reason = "Verify all material is present"
+        task.last_event_at = datetime.utcnow()
+        _append_decision(task, "material_arrived")
+
+        msg = notes or "Material arrived - checking completeness"
+        _add_event(session, task, "material_arrived", msg, {"to": "completion_check"})
+        _add_action(session, task, "material_arrived", user.email, msg, {})
+        return {"task_id": task.id, "new_stage": "completion_check"}
+
+
+@app.post("/workflow/completion-check/{task_id}")
+def completion_check(
+    task_id: int,
+    payload: CompletionCheckRequest,
+    user: AppUser = Depends(_require_role("buyer")),
+):
+    """Decision gate: All Material Present?
+    - Yes -> completed (Job Scheduled)
+    - No -> back to vendor_coordination for back-ordered materials
+    """
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.workflow_stage != "completion_check":
+            raise HTTPException(status_code=409, detail=f"Task is at {task.workflow_stage}, not completion_check")
+
+        task.all_material_present = payload.all_material_present
+        task.last_event_at = datetime.utcnow()
+
+        if payload.all_material_present:
+            task.workflow_stage = "completed"
+            task.status = "completed"
+            task.completed_at = datetime.utcnow()
+            task.human_required = False
+            task.blocked_reason = None
+            _append_decision(task, "all_material_present")
+            notes = "All material present - job scheduled"
+        else:
+            task.workflow_stage = "vendor_coordination"
+            task.human_required = True
+            task.blocked_reason = "Back-ordered materials - confirm vendor arrival dates"
+            task.backorder_notes = payload.backorder_notes
+            if payload.expected_delivery_date:
+                try:
+                    task.expected_delivery_date = datetime.fromisoformat(payload.expected_delivery_date)
+                except ValueError:
+                    pass
+            _append_decision(task, "backorder_loop")
+            notes = f"Missing material - back to vendor coordination. {payload.backorder_notes or ''}"
+
+        _add_event(session, task, "completion_check", notes,
+                   {"all_present": payload.all_material_present, "to": task.workflow_stage})
+        _add_action(session, task, "completion_check", user.email, notes,
+                    {"all_present": payload.all_material_present, "backorder_notes": payload.backorder_notes})
+        return {"task_id": task.id, "new_stage": task.workflow_stage, "all_material_present": payload.all_material_present}
+
+
+# ---- Task detail with timeline ----
+
+
+@app.get("/tasks/{task_id}")
+def get_task_detail(
+    task_id: int,
+    _user: AppUser = Depends(_require_role("viewer")),
+):
+    with db_session() as session:
+        task = session.execute(select(Task).where(Task.id == task_id)).scalar_one_or_none()
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        events = session.execute(
+            select(TaskEvent).where(TaskEvent.task_id == task_id).order_by(TaskEvent.event_at.asc())
+        ).scalars().all()
+        actions = session.execute(
+            select(WorkflowAction).where(WorkflowAction.task_id == task_id).order_by(WorkflowAction.id.asc())
+        ).scalars().all()
+    return {
+        "task": _task_dict(task),
+        "events": [
+            {"id": e.id, "event_type": e.event_type, "notes": e.notes, "at": e.event_at.isoformat() if e.event_at else None, "payload": e.payload_json}
+            for e in events
+        ],
+        "actions": [
+            {"id": a.id, "action_type": a.action_type, "actor_email": a.actor_email, "notes": a.notes, "at": a.created_at.isoformat() if a.created_at else None}
+            for a in actions
+        ],
+    }
+
+
+# ---- Original endpoints (preserved) ----
 
 
 @app.get("/health")
@@ -218,7 +663,7 @@ def health() -> dict[str, str]:
 
 
 @app.get("/dashboard/summary")
-def dashboard_summary(_user: AppUser = Depends(_require_role("viewer"))) -> dict[str, int | float]:
+def dashboard_summary(_user: AppUser = Depends(_require_role("viewer"))) -> dict:
     with db_session() as session:
         open_tasks = session.execute(select(func.count()).select_from(Task).where(Task.status == "open")).scalar_one()
         financial_approvals_pending = session.execute(
@@ -234,6 +679,25 @@ def dashboard_summary(_user: AppUser = Depends(_require_role("viewer"))) -> dict
             select(func.count()).select_from(Task).where(Task.status == "open", Task.priority == "high")
         ).scalar_one()
         spend = session.execute(select(func.coalesce(func.sum(PurchaseOrder.total_amount), 0.0))).scalar_one()
+        # Per-stage counts for the overview
+        awaiting_budget = session.execute(
+            select(func.count()).select_from(Task).where(Task.status == "open", Task.workflow_stage.in_(("job_setup", "budget_review")))
+        ).scalar_one()
+        awaiting_assignment = session.execute(
+            select(func.count()).select_from(Task).where(Task.status == "open", Task.workflow_stage == "task_assignment")
+        ).scalar_one()
+        in_procurement = session.execute(
+            select(func.count()).select_from(Task).where(
+                Task.status == "open",
+                Task.workflow_stage.in_(("pricing_validation", "vendor_coordination", "order_placement", "order_confirmation")),
+            )
+        ).scalar_one()
+        in_fulfillment = session.execute(
+            select(func.count()).select_from(Task).where(
+                Task.status == "open",
+                Task.workflow_stage.in_(("material_check", "yard_pull", "material_receiving", "completion_check")),
+            )
+        ).scalar_one()
     return {
         "open_tasks": int(open_tasks),
         "financial_approvals_pending": int(financial_approvals_pending),
@@ -241,6 +705,10 @@ def dashboard_summary(_user: AppUser = Depends(_require_role("viewer"))) -> dict
         "pending_order_confirmations": int(pending_order_confirms),
         "open_high_priority_tasks": int(top_priority),
         "tracked_po_spend": float(spend or 0.0),
+        "awaiting_budget_review": int(awaiting_budget),
+        "awaiting_assignment": int(awaiting_assignment),
+        "in_procurement": int(in_procurement),
+        "in_fulfillment": int(in_fulfillment),
     }
 
 
@@ -291,25 +759,7 @@ def list_tasks(
         if status:
             stmt = stmt.where(Task.status == status)
         rows = session.execute(stmt).scalars().all()
-    return [
-        {
-            "id": row.id,
-            "task_type": row.task_type,
-            "status": row.status,
-            "priority": row.priority,
-            "job_number": row.job_number,
-            "workflow_spine": row.workflow_spine,
-            "workflow_stage": row.workflow_stage,
-            "human_required": row.human_required,
-            "auto_allowed": row.auto_allowed,
-            "blocked_reason": row.blocked_reason,
-            "source_folder_path": row.source_folder_path,
-            "source_message_id": row.source_message_id,
-            "source_document_id": row.source_document_id,
-            "details": row.details_json,
-        }
-        for row in rows
-    ]
+    return [_task_dict(row) for row in rows]
 
 
 @app.get("/rfqs")
@@ -422,28 +872,11 @@ def approve_purchase_order(po_id: int, payload: ApprovePoRequest, user: AppUser 
                 task.blocked_reason = None
                 task.status = "completed"
                 task.completed_at = datetime.utcnow()
-                task.workflow_stage = "invoice_match_completed"
-                session.add(
-                    TaskEvent(
-                        task_id=task.id,
-                        event_type="approval_completed",
-                        message_id=task.source_message_id,
-                        document_id=task.source_document_id,
-                        notes="Financial approval completed by approver.",
-                        payload_json={"approved_by": user.email, "po_id": row.id},
-                    )
-                )
-                session.add(
-                    WorkflowAction(
-                        task_id=task.id,
-                        action_type="financial_transition_approved",
-                        action_mode="human",
-                        action_status="applied",
-                        actor_email=user.email,
-                        notes=payload.notes or "PO approval applied",
-                        payload_json={"po_id": row.id},
-                    )
-                )
+                task.workflow_stage = "completed"
+                _add_event(session, task, "approval_completed", "Financial approval completed by approver.",
+                           {"approved_by": user.email, "po_id": row.id})
+                _add_action(session, task, "financial_transition_approved", user.email,
+                            payload.notes or "PO approval applied", {"po_id": row.id})
         return {"id": row.id, "status": row.status, "approved_by": user.email}
 
 
@@ -560,7 +993,7 @@ def decide_financial_approval(
             task.blocked_reason = None
             task.status = "completed"
             task.completed_at = datetime.utcnow()
-            task.workflow_stage = "invoice_match_completed"
+            task.workflow_stage = "completed"
             action_type = "financial_transition_approved"
             notes = payload.notes or "Approved in financial approval queue"
         else:
@@ -571,27 +1004,8 @@ def decide_financial_approval(
             notes = task.blocked_reason
 
         task.last_event_at = datetime.utcnow()
-        session.add(
-            TaskEvent(
-                task_id=task.id,
-                event_type=action_type,
-                message_id=task.source_message_id,
-                document_id=task.source_document_id,
-                notes=notes,
-                payload_json={"actor": user.email, "decision": payload.decision},
-            )
-        )
-        session.add(
-            WorkflowAction(
-                task_id=task.id,
-                action_type=action_type,
-                action_mode="human",
-                action_status="applied",
-                actor_email=user.email,
-                notes=notes,
-                payload_json={"decision": payload.decision},
-            )
-        )
+        _add_event(session, task, action_type, notes, {"actor": user.email, "decision": payload.decision})
+        _add_action(session, task, action_type, user.email, notes, {"decision": payload.decision})
         return {"task_id": task.id, "decision": payload.decision, "status": task.status}
 
 
@@ -624,19 +1038,7 @@ def workflow_lanes(
             lanes[lane] = []
         if len(lanes[lane]) >= limit_per_lane:
             continue
-        lanes[lane].append(
-            {
-                "task_id": task.id,
-                "job_number": task.job_number,
-                "status": task.status,
-                "priority": task.priority,
-                "human_required": task.human_required,
-                "auto_allowed": task.auto_allowed,
-                "blocked_reason": task.blocked_reason,
-                "due_at": task.due_at,
-                "details": task.details_json,
-            }
-        )
+        lanes[lane].append(_task_dict(task))
 
     return {
         "lane_order": lane_order,
@@ -674,27 +1076,12 @@ def advance_workflow_stage(
         ) >= 25000
         task.auto_allowed = payload.next_stage not in financial_stages
         task.blocked_reason = None
-        session.add(
-            TaskEvent(
-                task_id=task.id,
-                event_type="stage_advanced",
-                message_id=task.source_message_id,
-                document_id=task.source_document_id,
-                notes=payload.notes or f"Advanced from {old_stage} to {payload.next_stage}",
-                payload_json={"from": old_stage, "to": payload.next_stage},
-            )
-        )
-        session.add(
-            WorkflowAction(
-                task_id=task.id,
-                action_type="stage_advanced",
-                action_mode="human",
-                action_status="applied",
-                actor_email=user.email,
-                notes=payload.notes or f"{old_stage} → {payload.next_stage}",
-                payload_json={"from": old_stage, "to": payload.next_stage},
-            )
-        )
+        _add_event(session, task, "stage_advanced",
+                   payload.notes or f"Advanced from {old_stage} to {payload.next_stage}",
+                   {"from": old_stage, "to": payload.next_stage})
+        _add_action(session, task, "stage_advanced", user.email,
+                    payload.notes or f"{old_stage} \u2192 {payload.next_stage}",
+                    {"from": old_stage, "to": payload.next_stage})
         return {"task_id": task.id, "old_stage": old_stage, "new_stage": payload.next_stage}
 
 
