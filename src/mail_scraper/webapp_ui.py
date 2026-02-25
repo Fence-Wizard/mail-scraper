@@ -163,6 +163,64 @@ input,select,textarea{font-family:inherit}
   .main{margin-left:56px}
   .nav-item{justify-content:center;padding:10px}
 }
+
+/* Modern UX enhancements */
+:root{
+  --bg:#060a12;--sidebar:#0b1424;--surface:#101b2d;--surface2:#162338;--surface3:#1c2d47;
+  --border:#263b59;--text:#eef4ff;--muted:#9fb1cd;--blue:#4f8cff;--cyan:#4cc9f0;
+  --red:#ff5d73;--gray:#6f86a6;--green:#34d399;--amber:#fbbf24;
+}
+body{background:radial-gradient(circle at 10% -10%,#17335a 0,#060a12 40%),var(--bg);color:var(--text)}
+.sidebar{background:linear-gradient(180deg,#0b1424 0%,#09101d 100%);box-shadow:0 0 0 1px rgba(255,255,255,.02),8px 0 30px rgba(0,0,0,.25)}
+.nav-item{border:1px solid transparent}
+.nav-item:hover{background:var(--surface3);border-color:var(--border)}
+.nav-item.active{background:linear-gradient(135deg,#4f8cff,#3b74ec)}
+.main{background:transparent}
+.topbar{position:sticky;top:0;z-index:20;background:rgba(9,16,29,.88);backdrop-filter:blur(10px)}
+.content{padding:22px 24px 28px}
+.hero-card{padding:16px 18px;border:1px solid var(--border);background:linear-gradient(130deg,rgba(79,140,255,.18),rgba(76,201,240,.06) 45%,rgba(16,27,45,.8));border-radius:14px;margin-bottom:14px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.hero-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.hero-sub{font-size:12px;color:var(--muted)}
+.hero-meta{display:flex;gap:10px;flex-wrap:wrap}
+.hero-chip{font-size:11px;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}
+.kpi{background:linear-gradient(180deg,rgba(21,35,56,.95),rgba(12,21,35,.95));border-color:#2c456b;border-radius:12px}
+.kpi-value{letter-spacing:-.02em}
+.dashboard-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+.workflow-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin:14px 0 16px}
+.workflow-node{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px;position:relative}
+.workflow-node .name{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.workflow-node .count{font-size:20px;font-weight:700;margin-top:4px}
+.workflow-node .meta{font-size:10px;color:var(--muted)}
+.board-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px;border:1px solid var(--border);background:var(--surface);border-radius:12px}
+.board-toolbar input,.board-toolbar select{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:8px;font-size:12px}
+.board-toolbar .chip-btn{padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:11px;font-weight:600}
+.board-toolbar .chip-btn.active{background:rgba(79,140,255,.25);color:var(--text);border-color:#3d67a5}
+.process-group{border-radius:14px;border-color:#2a4366;background:linear-gradient(180deg,rgba(15,27,44,.95),rgba(11,20,33,.95));margin-bottom:14px}
+.process-header{padding:14px 16px}
+.lane{background:rgba(22,35,56,.8);border-color:#304a70;border-radius:10px}
+.card{border-radius:10px;border:1px solid #2e4970;background:#111f33;box-shadow:0 6px 14px rgba(0,0,0,.2)}
+.card:hover{transform:translateY(-1px);border-color:#4a75b6}
+.table-wrap{background:var(--surface);border-radius:12px;border:1px solid var(--border)}
+.data-table th{background:#10203a}
+.detail-panel{border:1px solid var(--border);border-radius:14px}
+
+.board-layout{display:grid;grid-template-columns:300px 1fr;gap:12px;align-items:start}
+.flow-panel{position:sticky;top:74px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px}
+.flow-title{font-size:12px;font-weight:700;margin-bottom:4px}
+.flow-sub{font-size:11px;color:var(--muted);margin-bottom:10px}
+.flow-step{display:flex;gap:8px;padding:8px;border:1px solid var(--border);background:var(--surface2);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all .15s}
+.flow-step:hover{border-color:#4974b7}
+.flow-step.active{border-color:var(--cyan);background:rgba(76,201,240,.12)}
+.flow-step-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:#22344f;color:var(--text);flex-shrink:0}
+.flow-step-meta{font-size:10px;color:var(--muted);margin-top:2px}
+.flow-step-count{margin-left:auto;font-size:10px;background:#0d1727;border:1px solid var(--border);padding:2px 7px;border-radius:99px;height:fit-content}
+.quick-queue{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.queue-item{display:flex;align-items:center;justify-content:space-between;font-size:11px;padding:6px 0;border-bottom:1px dashed rgba(159,177,205,.25)}
+.queue-item:last-child{border-bottom:none}
+@media(max-width:1200px){.board-layout{grid-template-columns:1fr}.flow-panel{position:static}}
+
+@media(max-width:1200px){.dashboard-grid{grid-template-columns:1fr}.hero-card{flex-direction:column;align-items:flex-start}}
+
 </style>
 </head>
 <body>
@@ -221,8 +279,20 @@ input,select,textarea{font-family:inherit}
 
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
+      <div class="hero-card">
+        <div>
+          <div class="hero-title">Purchasing Command Center</div>
+          <div class="hero-sub">Track every procurement milestone from intake through fulfillment without losing your current workflow logic.</div>
+        </div>
+        <div class="hero-meta">
+          <span class="hero-chip" id="heroRefresh">Auto-refresh: 30s</span>
+          <span class="hero-chip" id="heroApprovals">Pending approvals: 0</span>
+          <span class="hero-chip" id="heroHighPriority">High priority: 0</span>
+        </div>
+      </div>
       <div class="kpi-row" id="kpiRow"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="workflow-strip" id="workflowStrip"></div>
+      <div class="dashboard-grid">
         <div>
           <h3 style="font-size:13px;margin-bottom:8px;color:var(--cyan)">Process Overview</h3>
           <div class="table-wrap" style="max-height:340px">
@@ -238,7 +308,28 @@ input,select,textarea{font-family:inherit}
 
     <!-- JOB BOARD -->
     <div class="page" id="page-board">
-      <div id="jobBoard"></div>
+      <div class="board-toolbar">
+        <input type="search" id="boardSearch" placeholder="Search by job #, vendor, PO" oninput="renderBoard()"/>
+        <select id="boardPriority" onchange="renderBoard()">
+          <option value="all">All priorities</option>
+          <option value="high">High priority only</option>
+          <option value="normal">Normal priority only</option>
+        </select>
+        <button class="chip-btn" id="boardNeedsAction" onclick="toggleNeedsActionFilter()">Needs Human Action</button>
+        <button class="chip-btn" id="boardClearFilters" onclick="clearBoardFilters()">Clear Filters</button>
+      </div>
+      <div class="board-layout">
+        <aside class="flow-panel">
+          <div class="flow-title">Workflow Navigator</div>
+          <div class="flow-sub">Focus on one lifecycle group at a time while keeping the full process model intact.</div>
+          <div id="flowSteps"></div>
+          <div class="quick-queue">
+            <div class="flow-title" style="font-size:11px">Needs attention next</div>
+            <div id="attentionQueue"></div>
+          </div>
+        </aside>
+        <div id="jobBoard"></div>
+      </div>
     </div>
 
     <!-- APPROVALS -->
@@ -426,6 +517,8 @@ const STAGE_LABELS=Object.fromEntries(ALL_STAGES);
 
 let STATE={tasks:[],approvals:[],vendors:[],actions:[],summary:{}};
 let collapsedGroups={};
+let boardNeedsActionOnly=false;
+let focusedGroup="all";
 
 function headers(){return{"X-User-Email":document.getElementById("userEmail").value,"Content-Type":"application/json"}}
 function money(v){return"$"+Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0})}
@@ -504,6 +597,12 @@ function renderDashboard(){
   });
   document.getElementById("stageTable").innerHTML=tableHtml||"<tr><td colspan=3 class='empty-state'>No data</td></tr>";
 
+  document.getElementById("heroApprovals").textContent=`Pending approvals: ${s.financial_approvals_pending||0}`;
+  document.getElementById("heroHighPriority").textContent=`High priority: ${s.open_high_priority_tasks||0}`;
+
+  const workflowNodes=ALL_STAGES.map(([key,label])=>`<div class="workflow-node"><div class="name">${label}</div><div class="count">${stageCounts[key]||0}</div><div class="meta">${(stageCounts[key]||0)===1?"task":"tasks"}</div></div>`).join("");
+  document.getElementById("workflowStrip").innerHTML=workflowNodes;
+
   document.getElementById("dashActivity").innerHTML=(STATE.actions||[]).slice(0,12).map(a=>`
     <div class="activity-item">
       <div class="activity-dot ${a.action_mode}"></div>
@@ -517,14 +616,28 @@ function renderDashboard(){
 // ---- Job Board (Process Groups) ----
 function renderBoard(){
   const byStage={};
+  const search=(document.getElementById("boardSearch")?.value||"").toLowerCase().trim();
+  const priority=document.getElementById("boardPriority")?.value||"all";
   ALL_STAGES.forEach(([k])=>byStage[k]=[]);
   STATE.tasks.forEach(t=>{
+    const d=t.details||{};
+    const text=[t.job_number,d.vendor,d.po_number].filter(Boolean).join(" ").toLowerCase();
+    if(search && !text.includes(search)) return;
+    if(priority!=="all" && t.priority!==priority) return;
+    if(boardNeedsActionOnly && !t.human_required) return;
     const st=t.workflow_stage||"job_setup";
     if(!byStage[st])byStage[st]=[];
     byStage[st].push(t);
   });
 
-  document.getElementById("jobBoard").innerHTML=PROCESS_GROUPS.map((g,gi)=>{
+  const groupCounts=PROCESS_GROUPS.map(g=>({
+    id:g.id,
+    count:g.stages.reduce((sum,[stage])=>sum+(byStage[stage]||[]).length,0),
+    human:g.stages.reduce((sum,[stage])=>sum+(byStage[stage]||[]).filter(t=>t.human_required).length,0),
+  }));
+  renderFlowNavigator(groupCounts,byStage);
+
+  document.getElementById("jobBoard").innerHTML=PROCESS_GROUPS.filter(g=>focusedGroup==="all"||g.id===focusedGroup).map((g,gi)=>{
     const groupTotal=g.stages.reduce((s,[k])=>s+(byStage[k]||[]).length,0);
     const humanCount=g.stages.reduce((s,[k])=>s+(byStage[k]||[]).filter(t=>t.human_required).length,0);
     const isCollapsed=collapsedGroups[g.id];
@@ -546,7 +659,7 @@ function renderBoard(){
       <div class="process-header" onclick="toggleGroup('${g.id}')">
         <div>
           <div class="process-title">
-            <div class="process-num" style="background:${g.color}">${gi+1}</div>
+            <div class="process-num" style="background:${g.color}">${PROCESS_GROUPS.findIndex(pg=>pg.id===g.id)+1}</div>
             <span class="process-name">${g.name}</span>
           </div>
           <div class="process-desc">${g.desc}</div>
@@ -579,6 +692,61 @@ function renderCard(t){
     </div>
     ${t.human_required?`<div class="card-row" style="margin-top:3px"><span class="pill pill-human">Needs Approval</span></div>`:""}
   </div>`;
+}
+
+
+
+function renderFlowNavigator(groupCounts,byStage){
+  const steps=PROCESS_GROUPS.map((g,idx)=>{
+    const count=groupCounts.find(x=>x.id===g.id)?.count||0;
+    const human=groupCounts.find(x=>x.id===g.id)?.human||0;
+    const active=focusedGroup===g.id;
+    return `<div class="flow-step ${active?"active":""}" onclick="setFocusedGroup('${g.id}')">
+      <div class="flow-step-num">${idx+1}</div>
+      <div>
+        <div style="font-size:11px;font-weight:600">${g.name}</div>
+        <div class="flow-step-meta">${human?`${human} require action · `:""}${g.decision}</div>
+      </div>
+      <div class="flow-step-count">${count}</div>
+    </div>`;
+  }).join("");
+  document.getElementById("flowSteps").innerHTML=`<div class="flow-step ${focusedGroup==="all"?"active":""}" onclick="setFocusedGroup('all')">
+      <div class="flow-step-num">*</div>
+      <div><div style="font-size:11px;font-weight:600">All workflow groups</div><div class="flow-step-meta">Full end-to-end purchasing board</div></div>
+      <div class="flow-step-count">${STATE.tasks.length}</div>
+    </div>`+steps;
+
+  const attention=[...STATE.tasks]
+    .filter(t=>t.human_required || t.priority==="high")
+    .sort((a,b)=>Number(b.human_required)-Number(a.human_required))
+    .slice(0,6)
+    .map(t=>`<div class="queue-item"><span>${t.job_number||"No job #"}</span><span>${t.human_required?"Approval":"High"}</span></div>`)
+    .join("");
+  document.getElementById("attentionQueue").innerHTML=attention||"<div class='empty-state' style='padding:6px 0'>No urgent work items.</div>";
+}
+
+function setFocusedGroup(groupId){
+  focusedGroup=groupId;
+  renderBoard();
+}
+
+function clearBoardFilters(){
+  const search=document.getElementById("boardSearch");
+  const priority=document.getElementById("boardPriority");
+  if(search) search.value="";
+  if(priority) priority.value="all";
+  boardNeedsActionOnly=false;
+  focusedGroup="all";
+  const btn=document.getElementById("boardNeedsAction");
+  if(btn) btn.classList.remove("active");
+  renderBoard();
+}
+
+function toggleNeedsActionFilter(){
+  boardNeedsActionOnly=!boardNeedsActionOnly;
+  const btn=document.getElementById("boardNeedsAction");
+  if(btn) btn.classList.toggle("active",boardNeedsActionOnly);
+  renderBoard();
 }
 
 function toggleGroup(id){
